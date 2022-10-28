@@ -72,7 +72,7 @@ public:
     virtual ~Expr() = default;
     virtual void Print(std::ostream& out) const = 0;
     virtual void DoPrintFormula(std::ostream& out, ExprPrecedence precedence) const = 0;
-    virtual double Evaluate(/*добавьте сюда нужные аргументы*/ args) const = 0;
+    virtual double Evaluate(const CellLookup &cell_lookup) const = 0;
 
     // higher is tighter
     virtual ExprPrecedence GetPrecedence() const = 0;
@@ -142,8 +142,32 @@ public:
         }
     }
 
-    double Evaluate(/*добавьте нужные аргументы*/) const override {
-			// Скопируйте ваше решение из предыдущих уроков.
+    double Evaluate(const CellLookup &cell_lookup) const override {
+        // Скопируйте ваше решение из предыдущих уроков.
+        auto lhs_value = lhs_->Evaluate(cell_lookup);
+        auto rhs_value = rhs_->Evaluate(cell_lookup);
+
+        double result = NAN;
+        switch (type_) {
+            case Add:
+                result = lhs_value + rhs_value;
+                break;
+            case Subtract:
+                result = lhs_value - rhs_value;
+                break;
+            case Multiply:
+                result = lhs_value * rhs_value;
+                break;
+            case Divide:
+                result = lhs_value / rhs_value;
+            break;
+        }
+
+        if (!std::isfinite(result)) {
+            throw FormulaError(FormulaError::Category::Div0);
+        }
+
+        return result;    
     }
 
 private:
@@ -180,8 +204,17 @@ public:
         return EP_UNARY;
     }
 
-    double Evaluate(/*добавьте нужные аргументы*/ args) const override {
-        // Скопируйте ваше решение из предыдущих уроков.
+    double Evaluate(const CellLookup &cell_lookup) const override {
+        auto operand_value = operand_->Evaluate(cell_lookup);
+        switch (type_) {
+            case UnaryPlus:
+                return +operand_value;
+            case UnaryMinus:
+                return -operand_value;
+            default:
+                assert(false);
+                return NAN;
+        }
     }
 
 private:
@@ -211,8 +244,8 @@ public:
         return EP_ATOM;
     }
 
-    double Evaluate(/*добавьте нужные аргументы*/ args) const override {
-        // реализуйте метод.
+    double Evaluate(const CellLookup &cell_lookup) const override {
+        return cell_lookup(*cell_);
     }
 
 private:
@@ -237,7 +270,7 @@ public:
         return EP_ATOM;
     }
 
-    double Evaluate(/*добавьте нужные аргументы*/ args) const override {
+    double Evaluate(const CellLookup &) const override {
         return value_;
     }
 
@@ -391,8 +424,8 @@ void FormulaAST::PrintFormula(std::ostream& out) const {
     root_expr_->PrintFormula(out, ASTImpl::EP_ATOM);
 }
 
-double FormulaAST::Execute(/*добавьте нужные аргументы*/ args) const {
-    return root_expr_->Evaluate(/*добавьте нужные аргументы*/ args);
+double FormulaAST::Execute(const CellLookup &cell_lookup) const {
+    return root_expr_->Evaluate(cell_lookup);
 }
 
 FormulaAST::FormulaAST(std::unique_ptr<ASTImpl::Expr> root_expr, std::forward_list<Position> cells)
